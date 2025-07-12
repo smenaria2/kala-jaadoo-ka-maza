@@ -18,6 +18,9 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        mystical: "fire-button text-primary-foreground font-bold spooky-text",
+        spooky: "bg-accent text-accent-foreground hover:bg-accent/80 shadow-spooky border border-border",
+        ritual: "bg-gradient-to-r from-purple-900 to-red-900 text-foreground hover:from-purple-800 hover:to-red-800 shadow-mystical",
       },
       size: {
         default: "h-10 px-4 py-2",
