@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,12 @@ import {
   Car,
   Smartphone,
   Clock,
-  Wifi
+  Wifi,
+  Upload,
+  Camera,
+  Volume2,
+  Trophy,
+  Target
 } from 'lucide-react';
 import heroImage from '@/assets/hero-mystical.jpg';
 import voodooDoll from '@/assets/voodoo-doll.jpg';
@@ -35,6 +40,7 @@ interface DollData {
   avatar: string;
   outfit: string;
   nameTag: string;
+  facePhoto?: string;
 }
 
 interface RitualAction {
@@ -42,6 +48,8 @@ interface RitualAction {
   name: string;
   icon: React.ReactNode;
   performed: boolean;
+  sound?: string;
+  points: number;
 }
 
 const KalaJaadooApp = () => {
@@ -49,35 +57,145 @@ const KalaJaadooApp = () => {
   const [targetData, setTargetData] = useState<TargetData>({ name: '', relation: '' });
   const [dollData, setDollData] = useState<DollData>({ avatar: '', outfit: '', nameTag: '' });
   const [selectedCurse, setSelectedCurse] = useState('');
+  const [totalScore, setTotalScore] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  
   const [ritualActions, setRitualActions] = useState<RitualAction[]>([
-    { id: 'pins', name: 'सुई चुभाना', icon: <Zap className="w-5 h-5" />, performed: false },
-    { id: 'lemon', name: 'नींबू-मिर्ची डालना', icon: <Flame className="w-5 h-5" />, performed: false },
-    { id: 'yantra', name: 'यंत्र बनाना', icon: <Star className="w-5 h-5" />, performed: false },
-    { id: 'spin', name: 'सिर घुमाना', icon: <Moon className="w-5 h-5" />, performed: false },
-    { id: 'crows', name: 'कौवे छोड़ना', icon: <Eye className="w-5 h-5" />, performed: false },
+    { 
+      id: 'pins', 
+      name: 'सुई चुभाना', 
+      icon: <Zap className="w-5 h-5" />, 
+      performed: false,
+      sound: 'cry',
+      points: 20
+    },
+    { 
+      id: 'lemon', 
+      name: 'नींबू-मिर्ची डालना', 
+      icon: <Flame className="w-5 h-5" />, 
+      performed: false,
+      sound: 'fire',
+      points: 15
+    },
+    { 
+      id: 'yantra', 
+      name: 'यंत्र बनाना', 
+      icon: <Star className="w-5 h-5" />, 
+      performed: false,
+      sound: 'mystical',
+      points: 25
+    },
+    { 
+      id: 'spin', 
+      name: 'सिर घुमाना', 
+      icon: <Moon className="w-5 h-5" />, 
+      performed: false,
+      sound: 'whoosh',
+      points: 10
+    },
+    { 
+      id: 'crows', 
+      name: 'कौवे छोड़ना', 
+      icon: <Eye className="w-5 h-5" />, 
+      performed: false,
+      sound: 'crow',
+      points: 30
+    },
   ]);
 
+  // More Indian curses
   const curses = [
-    'हमेशा ट्रैफिक में फंसेंगे 🚗',
-    'फोन की बैटरी 1% पर ही खत्म होगी 📱',
-    'हर चाय ठंडी मिलेगी ☕',
-    'WiFi हमेशा धीमा चलेगा 📶',
-    'जूते में हमेशा कंकड़ आएगा 👟',
-    'छींक आधी में ही रुक जाएगी 🤧'
+    'हर रोज ऑटो वाला ज्यादा पैसे मांगेगा 🛺',
+    'गर्मी में हमेशा AC खराब होगा 🌡️',
+    'बारिश में हर छाता टूटेगा ☂️',
+    'हर दाल में नमक कम होगा 🍛',
+    'सब्जी हमेशा महंगी मिलेगी 🥬',
+    'ट्रेन हमेशा लेट होगी 🚂',
+    'हर पान में चूना ज्यादा होगा 🌿',
+    'गलियारे में हमेशा कुत्ता भौकेगा 🐕',
+    'हर चायवाला बासी चाय देगा ☕',
+    'सिनेमा हॉल में आगे लंबा आदमी बैठेगा 🎬',
+    'माँ हमेशा पड़ोसी से तुलना करेगी 👩‍👦',
+    'वाई-फाई हमेशा "connecting" दिखाएगा 📶'
   ];
 
   const relations = [
-    'दोस्त', 'बॉस', 'एक्स', 'भाई/बहन', 'पड़ोसी', 'सहकर्मी', 'टीचर', 'रिश्तेदार'
+    'दोस्त', 'बॉस', 'एक्स', 'भाई/बहन', 'पड़ोसी', 'सहकर्मी', 'टीचर', 'रिश्तेदार', 'साला', 'ससुर'
   ];
 
+  // Sound effects simulation
+  const playSound = (soundType: string) => {
+    if (!soundEnabled) return;
+    
+    // Create audio context for sound effects
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    switch (soundType) {
+      case 'cry':
+        // Simulate cry sound with oscillator
+        const cryOscillator = audioContext.createOscillator();
+        const cryGain = audioContext.createGain();
+        cryOscillator.connect(cryGain);
+        cryGain.connect(audioContext.destination);
+        cryOscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+        cryOscillator.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.5);
+        cryGain.gain.setValueAtTime(0.3, audioContext.currentTime);
+        cryGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        cryOscillator.start();
+        cryOscillator.stop(audioContext.currentTime + 0.5);
+        break;
+      case 'fire':
+        // Simulate fire crackling
+        const fireOscillator = audioContext.createOscillator();
+        const fireGain = audioContext.createGain();
+        fireOscillator.connect(fireGain);
+        fireGain.connect(audioContext.destination);
+        fireOscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+        fireOscillator.type = 'sawtooth';
+        fireGain.gain.setValueAtTime(0.2, audioContext.currentTime);
+        fireGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        fireOscillator.start();
+        fireOscillator.stop(audioContext.currentTime + 0.3);
+        break;
+      default:
+        console.log(`Playing ${soundType} sound effect`);
+    }
+  };
+
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const photoUrl = e.target?.result as string;
+        setTargetData(prev => ({ ...prev, photo: photoUrl }));
+        setDollData(prev => ({ ...prev, facePhoto: photoUrl }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const performRitualAction = (actionId: string) => {
-    setRitualActions(prev => 
-      prev.map(action => 
-        action.id === actionId 
-          ? { ...action, performed: true }
-          : action
-      )
-    );
+    const action = ritualActions.find(a => a.id === actionId);
+    if (action && !action.performed) {
+      // Play sound effect
+      if (action.sound) {
+        playSound(action.sound);
+      }
+      
+      // Add points
+      setTotalScore(prev => prev + action.points);
+      
+      // Mark as performed
+      setRitualActions(prev => 
+        prev.map(a => 
+          a.id === actionId 
+            ? { ...a, performed: true }
+            : a
+        )
+      );
+    }
   };
 
   const resetApp = () => {
@@ -85,6 +203,7 @@ const KalaJaadooApp = () => {
     setTargetData({ name: '', relation: '' });
     setDollData({ avatar: '', outfit: '', nameTag: '' });
     setSelectedCurse('');
+    setTotalScore(0);
     setRitualActions(prev => prev.map(action => ({ ...action, performed: false })));
   };
 
@@ -151,7 +270,7 @@ const KalaJaadooApp = () => {
     <div className="min-h-screen flex items-center justify-center p-6">
       <Card className="mystical-card p-8 max-w-md w-full">
         <div className="text-center mb-6">
-          <Eye className="w-16 h-16 mx-auto text-blood mb-4 floating-animation" />
+          <Target className="w-16 h-16 mx-auto text-blood mb-4 floating-animation" />
           <h2 className="text-3xl font-bold spooky-text">टारगेट की जानकारी</h2>
           <p className="text-muted-foreground mt-2">किस पर करना है जादू?</p>
         </div>
@@ -187,6 +306,55 @@ const KalaJaadooApp = () => {
             </Select>
           </div>
 
+          {/* Photo Upload */}
+          <div>
+            <Label>फोटो अपलोड करें (वैकल्पिक)</Label>
+            <div className="mt-2">
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => photoInputRef.current?.click()}
+                className="w-full"
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                {targetData.photo ? 'फोटो बदलें' : 'फोटो चुनें'}
+              </Button>
+              {targetData.photo && (
+                <div className="mt-3 text-center">
+                  <img
+                    src={targetData.photo}
+                    alt="Target"
+                    className="w-20 h-20 rounded-full mx-auto object-cover border-2 border-fire"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    यह चेहरा गुड़िया पर लगेगा 😈
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sound Toggle */}
+          <div className="flex items-center justify-between pt-2">
+            <Label>आवाज़ चालू करें</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={soundEnabled ? 'text-fire' : 'text-muted-foreground'}
+            >
+              <Volume2 className="w-4 h-4" />
+            </Button>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <Button 
               variant="outline" 
@@ -206,7 +374,7 @@ const KalaJaadooApp = () => {
           </div>
         </div>
 
-        {targetData.name === targetData.name.toLowerCase() && targetData.name.length > 0 && (
+        {targetData.name.toLowerCase() === 'myself' || targetData.name.toLowerCase() === 'खुद' && (
           <div className="mt-6 p-4 bg-accent/20 rounded-lg border border-blood/50">
             <p className="text-center text-blood font-bold">
               🪞 काला जादू हमेशा वापस आता है... अपना ही नाम डाला है? 😈
@@ -292,6 +460,18 @@ const KalaJaadooApp = () => {
                 alt="Voodoo Doll"
                 className="w-48 h-48 object-cover rounded-lg shadow-mystical floating-animation"
               />
+              
+              {/* Display uploaded photo as doll face */}
+              {dollData.facePhoto && (
+                <div className="absolute top-8 left-1/2 transform -translate-x-1/2">
+                  <img
+                    src={dollData.facePhoto}
+                    alt="Doll Face"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-fire shadow-glow"
+                  />
+                </div>
+              )}
+              
               <Badge className="absolute -top-2 -right-2 bg-fire text-primary-foreground">
                 {dollData.nameTag || targetData.name}
               </Badge>
@@ -299,6 +479,11 @@ const KalaJaadooApp = () => {
             <p className="text-center mt-4 text-muted-foreground">
               आपकी जादुई गुड़िया तैयार हो रही है... 🪄
             </p>
+            {dollData.facePhoto && (
+              <p className="text-center mt-2 text-fire text-sm font-bold">
+                चेहरा लग गया! अब जादू और भी प्रभावी होगा! 😈
+              </p>
+            )}
           </div>
         </div>
 
@@ -332,6 +517,14 @@ const KalaJaadooApp = () => {
           <p className="text-muted-foreground mt-2">
             {targetData.name} पर तंत्र-मंत्र करने का समय आ गया है! 😈
           </p>
+          
+          {/* Score Display */}
+          <div className="mt-4 flex justify-center">
+            <Badge className="bg-fire text-primary-foreground text-lg px-4 py-2">
+              <Trophy className="w-5 h-5 mr-2" />
+              स्कोर: {totalScore}
+            </Badge>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -346,11 +539,13 @@ const KalaJaadooApp = () => {
                     variant={action.performed ? "spooky" : "outline"}
                     onClick={() => performRitualAction(action.id)}
                     disabled={action.performed}
-                    className="w-full justify-start"
+                    className="w-full justify-start relative"
                   >
                     {action.icon}
                     <span className="ml-2">{action.name}</span>
-                    {action.performed && <span className="ml-auto">✅</span>}
+                    <span className="ml-auto text-xs text-candle">
+                      {action.performed ? '✅' : `+${action.points}`}
+                    </span>
                   </Button>
                 ))}
               </div>
@@ -389,6 +584,18 @@ const KalaJaadooApp = () => {
                     ritualActions.some(a => a.performed) ? 'shake' : 'floating-animation'
                   }`}
                 />
+                
+                {/* Display uploaded photo as doll face */}
+                {dollData.facePhoto && (
+                  <div className="absolute top-12 left-1/2 transform -translate-x-1/2">
+                    <img
+                      src={dollData.facePhoto}
+                      alt="Doll Face"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-fire shadow-glow"
+                    />
+                  </div>
+                )}
+                
                 <Badge className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-fire text-primary-foreground text-lg">
                   {dollData.nameTag || targetData.name}
                 </Badge>
@@ -459,6 +666,14 @@ const KalaJaadooApp = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Final Score Display */}
+          <div className="mb-6">
+            <Badge className="bg-fire text-primary-foreground text-xl px-6 py-3">
+              <Trophy className="w-6 h-6 mr-2" />
+              फाइनल स्कोर: {totalScore}
+            </Badge>
+          </div>
+
           <div className="p-6 bg-gradient-to-r from-purple-900/50 to-red-900/50 rounded-lg border border-fire/50">
             <h3 className="text-xl font-bold text-fire mb-3">जादुई सर्टिफिकेट</h3>
             <div className="space-y-2 text-left">
@@ -466,6 +681,7 @@ const KalaJaadooApp = () => {
               <p><strong>रिश्ता:</strong> {targetData.relation}</p>
               <p><strong>श्राप:</strong> {selectedCurse}</p>
               <p><strong>तंत्र किए गए:</strong> {ritualActions.filter(a => a.performed).length}/5</p>
+              <p><strong>कुल स्कोर:</strong> {totalScore} अंक</p>
               <p><strong>प्रभावशीलता:</strong> 100% अप्रभावी ✨</p>
             </div>
           </div>
