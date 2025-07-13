@@ -22,6 +22,7 @@ import {
   Upload,
   Camera,
   Volume2,
+  VolumeX,
   Trophy,
   Target,
   Timer,
@@ -41,7 +42,6 @@ interface TargetData {
 
 interface DollData {
   avatar: string;
-  outfit: string;
   nameTag: string;
   facePhoto?: string;
 }
@@ -58,10 +58,10 @@ interface RitualAction {
 const KalaJaadooApp = () => {
   const [currentStep, setCurrentStep] = useState<AppStep>('home');
   const [targetData, setTargetData] = useState<TargetData>({ name: '', relation: '' });
-  const [dollData, setDollData] = useState<DollData>({ avatar: '', outfit: '', nameTag: '' });
+  const [dollData, setDollData] = useState<DollData>({ avatar: '', nameTag: '' });
   const [selectedCurse, setSelectedCurse] = useState('');
   const [totalScore, setTotalScore] = useState(0);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true); // Default ON
   const [timeLeft, setTimeLeft] = useState(30);
   const [gameActive, setGameActive] = useState(false);
   const [pinPositions, setPinPositions] = useState<{x: number, y: number, id: number}[]>([]);
@@ -69,9 +69,11 @@ const KalaJaadooApp = () => {
   const [curseScrolling, setCurseScrolling] = useState(false);
   const [scrollingCurses, setScrollingCurses] = useState<string[]>([]);
   const [dollVariant, setDollVariant] = useState(1);
+  const [dollShaking, setDollShaking] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const curseScrollRef = useRef<NodeJS.Timeout | null>(null);
+  const dollRef = useRef<HTMLDivElement>(null);
   
   const [ritualActions, setRitualActions] = useState<RitualAction[]>([
     { 
@@ -218,6 +220,16 @@ const KalaJaadooApp = () => {
     }
   };
 
+  // Scroll to doll function
+  const scrollToDoll = () => {
+    if (dollRef.current) {
+      dollRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }
+  };
+
   // Timer and game mechanics
   const startGameTimer = useCallback(() => {
     setGameActive(true);
@@ -225,6 +237,11 @@ const KalaJaadooApp = () => {
     setTotalScore(0);
     setPinPositions([]);
     setLemonCount(0);
+    
+    // Scroll to doll
+    setTimeout(() => {
+      scrollToDoll();
+    }, 500);
     
     // Start main timer
     timerRef.current = setInterval(() => {
@@ -283,7 +300,13 @@ const KalaJaadooApp = () => {
   const hitPin = (pinId: number) => {
     setPinPositions(prev => prev.filter(p => p.id !== pinId));
     setTotalScore(prev => prev + 10);
+    setDollShaking(true);
     playSound('cry');
+    
+    // Stop shaking after 500ms
+    setTimeout(() => {
+      setDollShaking(false);
+    }, 500);
   };
 
   const placeLemon = () => {
@@ -328,53 +351,121 @@ const KalaJaadooApp = () => {
     }
   }, [dollData.avatar]);
 
-  const shareResult = async () => {
-    const shareData = {
-      title: 'काला जादू सर्टिफिकेट',
-      text: `मैंने ${targetData.name} पर जादू किया है! स्कोर: ${totalScore} 😈`,
-      url: window.location.href,
-    };
+  // Generate certificate image
+  const generateCertificateImage = async (): Promise<string> => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
 
-    if (navigator.share) {
+    canvas.width = 800;
+    canvas.height = 600;
+
+    // Draw certificate background
+    const gradient = ctx.createLinearGradient(0, 0, 800, 600);
+    gradient.addColorStop(0, '#1a1a1a');
+    gradient.addColorStop(1, '#4a1a4a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 800, 600);
+    
+    // Border
+    ctx.strokeStyle = '#ff6b35';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(20, 20, 760, 560);
+    
+    // Title
+    ctx.fillStyle = '#ff6b35';
+    ctx.font = 'bold 36px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('काला जादू सर्टिफिकेट', 400, 80);
+    
+    // Content
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px Arial';
+    ctx.fillText(`टारगेट: ${targetData.name}`, 400, 140);
+    ctx.fillText(`रिश्ता: ${targetData.relation}`, 400, 170);
+    ctx.fillText(`श्राप: ${selectedCurse}`, 400, 200);
+    ctx.fillText(`सुई हिट्स: ${Math.floor(totalScore / 10)} बार`, 400, 230);
+    ctx.fillText(`नींबू रखे: ${lemonCount} नग`, 400, 260);
+    ctx.fillText(`काला जादू प्रभाव: ${totalScore}%`, 400, 290);
+    
+    const effectiveness = totalScore > 100 ? 'अति प्रभावी' : totalScore > 50 ? 'प्रभावी' : 'कम प्रभावी';
+    ctx.fillText(`प्रभावशीलता: ${effectiveness} (100% अप्रभावी)`, 400, 320);
+    
+    // Doll representation
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = '60px Arial';
+    ctx.fillText('🪆', 300, 420);
+    
+    // Face if available
+    if (dollData.facePhoto) {
       try {
-        await navigator.share(shareData);
-      } catch (err) {
-        console.log('Error sharing:', err);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.src = dollData.facePhoto!;
+        });
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(500, 380, 40, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, 460, 340, 80, 80);
+        ctx.restore();
+      } catch (error) {
+        console.log('Could not load face image for certificate');
       }
-    } else {
-      // Fallback for browsers that don't support Web Share API
-      navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
-      alert('शेयर लिंक कॉपी हो गया!');
+    }
+    
+    // Footer
+    ctx.fillStyle = '#888888';
+    ctx.font = '16px Arial';
+    ctx.fillText('App created by Sumit Menaria', 400, 520);
+    ctx.fillText('पूरी तरह से मनोरंजन के लिए बनाया गया', 400, 550);
+
+    return canvas.toDataURL('image/png');
+  };
+
+  const shareResult = async () => {
+    try {
+      const certificateImage = await generateCertificateImage();
+      
+      // Convert data URL to blob
+      const response = await fetch(certificateImage);
+      const blob = await response.blob();
+      
+      const shareData = {
+        title: 'काला जादू सर्टिफिकेट',
+        text: `मैंने ${targetData.name} पर जादू किया है! काला जादू प्रभाव: ${totalScore}% 😈`,
+        files: [new File([blob], 'kala-jaadoo-certificate.png', { type: 'image/png' })]
+      };
+
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback - download the image and copy text
+        const link = document.createElement('a');
+        link.download = `kala-jaadoo-${targetData.name}.png`;
+        link.href = certificateImage;
+        link.click();
+        
+        navigator.clipboard.writeText(`${shareData.text} - App created by Sumit Menaria`);
+        alert('सर्टिफिकेट डाउनलोड हो गया और टेक्स्ट कॉपी हो गया!');
+      }
+    } catch (err) {
+      console.log('Error sharing:', err);
+      // Fallback to text sharing
+      const shareText = `मैंने ${targetData.name} पर जादू किया है! काला जादू प्रभाव: ${totalScore}% 😈 - App created by Sumit Menaria`;
+      navigator.clipboard.writeText(shareText);
+      alert('शेयर टेक्स्ट कॉपी हो गया!');
     }
   };
 
-  const downloadCertificate = () => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = 600;
-    canvas.height = 400;
-
-    // Draw certificate background
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(0, 0, 600, 400);
-    
-    ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 24px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('काला जादू सर्टिफिकेट', 300, 50);
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '16px Arial';
-    ctx.fillText(`टारगेट: ${targetData.name}`, 300, 100);
-    ctx.fillText(`श्राप: ${selectedCurse}`, 300, 130);
-    ctx.fillText(`स्कोर: ${totalScore}`, 300, 160);
-    ctx.fillText('प्रभावशीलता: 100% अप्रभावी', 300, 190);
-
+  const downloadCertificate = async () => {
+    const certificateImage = await generateCertificateImage();
     const link = document.createElement('a');
     link.download = `kala-jaadoo-${targetData.name}.png`;
-    link.href = canvas.toDataURL();
+    link.href = certificateImage;
     link.click();
   };
 
@@ -389,7 +480,7 @@ const KalaJaadooApp = () => {
   const resetApp = () => {
     setCurrentStep('home');
     setTargetData({ name: '', relation: '' });
-    setDollData({ avatar: '', outfit: '', nameTag: '' });
+    setDollData({ avatar: '', nameTag: '' });
     setSelectedCurse('');
     setTotalScore(0);
     setTimeLeft(30);
@@ -397,6 +488,7 @@ const KalaJaadooApp = () => {
     setPinPositions([]);
     setLemonCount(0);
     setCurseScrolling(false);
+    setDollShaking(false);
     setRitualActions(prev => prev.map(action => ({ ...action, performed: false })));
     if (timerRef.current) clearInterval(timerRef.current);
     if (curseScrollRef.current) clearInterval(curseScrollRef.current);
@@ -454,7 +546,13 @@ const KalaJaadooApp = () => {
         <div className="mt-12 p-4 mystical-card rounded-lg">
           <p className="text-sm text-muted-foreground italic">
             ⚠️ <strong>अस्वीकरण:</strong> यह ऐप पूरी तरह से मनोरंजन के लिए है। 
-            कोई भी वास्तविक जादू नहीं किया जाता। जादू से याद आया, आपने आज पानी पिया है ना? 💧
+            कोई भी वास्तविक जादू नहीं किया जाता। जादू से याद आया, आज आपने धूप लिया? ☀️
+          </p>
+        </div>
+
+        <div className="mt-6 text-center">
+          <p className="text-xs text-muted-foreground">
+            App created by Sumit Menaria
           </p>
         </div>
       </div>
@@ -538,7 +636,7 @@ const KalaJaadooApp = () => {
 
           {/* Sound Toggle */}
           <div className="flex items-center justify-between pt-2">
-            <Label>आवाज़ चालू करें</Label>
+            <Label>आवाज़ {soundEnabled ? 'चालू' : 'बंद'}</Label>
             <Button
               type="button"
               variant="ghost"
@@ -546,7 +644,7 @@ const KalaJaadooApp = () => {
               onClick={() => setSoundEnabled(!soundEnabled)}
               className={soundEnabled ? 'text-fire' : 'text-muted-foreground'}
             >
-              <Volume2 className="w-4 h-4" />
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
           </div>
 
@@ -629,25 +727,6 @@ const KalaJaadooApp = () => {
             </div>
 
             <div>
-              <Label htmlFor="outfit">पोशाक</Label>
-              <Select
-                value={dollData.outfit}
-                onValueChange={(value) => setDollData(prev => ({ ...prev, outfit: value }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="पोशाक चुनें..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kurta">कुर्ता 👔</SelectItem>
-                  <SelectItem value="saree">साड़ी 🥻</SelectItem>
-                  <SelectItem value="suit">सूट 🤵</SelectItem>
-                  <SelectItem value="dhoti">धोती 🕴️</SelectItem>
-                  <SelectItem value="monster">राक्षस 👹</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
               <Label htmlFor="nameTag">नाम टैग</Label>
               <Input
                 id="nameTag"
@@ -666,8 +745,7 @@ const KalaJaadooApp = () => {
                 alt="Voodoo Doll"
                 className="w-48 h-48 object-cover rounded-lg shadow-mystical floating-animation"
                 style={{
-                  filter: `hue-rotate(${dollVariant * 90}deg) brightness(1.1)`,
-                  transform: dollData.outfit ? 'scale(1.05)' : 'scale(1)'
+                  filter: `hue-rotate(${dollVariant * 90}deg) brightness(1.1)`
                 }}
               />
               
@@ -679,16 +757,6 @@ const KalaJaadooApp = () => {
                     alt="Doll Face"
                     className="w-16 h-16 rounded-full object-cover border-2 border-fire shadow-glow"
                   />
-                </div>
-              )}
-              
-              {/* Outfit indicator */}
-              {dollData.outfit && (
-                <div className="absolute bottom-2 right-2 text-2xl">
-                  {dollData.outfit === 'kurta' ? '👔' : 
-                   dollData.outfit === 'saree' ? '🥻' : 
-                   dollData.outfit === 'suit' ? '🤵' : 
-                   dollData.outfit === 'dhoti' ? '🕴️' : '👹'}
                 </div>
               )}
               
@@ -746,7 +814,7 @@ const KalaJaadooApp = () => {
             </Badge>
             <Badge className="bg-fire text-white text-lg px-4 py-2">
               <Trophy className="w-5 h-5 mr-2" />
-              स्कोर: {totalScore}
+              काला जादू प्रभाव: {totalScore}%
             </Badge>
           </div>
 
@@ -762,13 +830,30 @@ const KalaJaadooApp = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Game Controls */}
+          {/* Game Instructions */}
           <div className="lg:col-span-1">
             {gameActive && (
               <Card className="mystical-card p-6 mb-6">
-                <h3 className="text-xl font-bold mb-4 text-fire">तुरंत करें!</h3>
-                <div className="space-y-3 text-white">
-                  <p className="text-sm mb-2">सुइयों पर तेज़ी से टैप करें!</p>
+                <h3 className="text-xl font-bold mb-4 text-fire">खेल के नियम!</h3>
+                <div className="space-y-3 text-white text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📌</span>
+                    <span>सुइयों पर तेज़ी से टैप करें!</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🍋</span>
+                    <span>नींबू बटन दबाते रहें!</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚡</span>
+                    <span>ज्यादा पॉइंट्स के लिए तेज़ी से खेलें!</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎯</span>
+                    <span>गुड़िया पर दिखने वाली सुइयों को हिट करें!</span>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
                   <Button
                     onClick={generateRandomPins}
                     className="w-full bg-blood hover:bg-blood/90 text-white"
@@ -822,7 +907,7 @@ const KalaJaadooApp = () => {
           </div>
 
           {/* Interactive Doll Display */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2" ref={dollRef}>
             <Card className="mystical-card p-8 text-center">
               <h3 className="text-2xl font-bold mb-6 text-candle">जादुई गुड़िया</h3>
               
@@ -830,17 +915,17 @@ const KalaJaadooApp = () => {
                 <img 
                   src={voodooDoll} 
                   alt="Target Doll"
-                  className={`w-64 h-64 object-cover rounded-lg shadow-spooky mx-auto ${
+                  className={`w-64 h-64 object-cover rounded-lg shadow-spooky mx-auto transition-all duration-300 ${
                     gameActive ? 'animate-pulse' : 'floating-animation'
-                  }`}
+                  } ${dollShaking ? 'shake' : ''}`}
                   style={{
                     filter: `hue-rotate(${dollVariant * 90}deg) brightness(1.1)`
                   }}
                 />
                 
-                {/* Display uploaded photo as doll face */}
+                {/* Display uploaded photo as doll face - moves with doll */}
                 {dollData.facePhoto && (
-                  <div className="absolute top-12 left-1/2 transform -translate-x-1/2">
+                  <div className={`absolute top-12 left-1/2 transform -translate-x-1/2 transition-all duration-300 ${dollShaking ? 'shake' : ''}`}>
                     <img
                       src={dollData.facePhoto}
                       alt="Doll Face"
@@ -946,7 +1031,7 @@ const KalaJaadooApp = () => {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 mb-8">
-          {/* Final Doll Display */}
+          {/* Final Doll Display with Face */}
           <div className="text-center">
             <h3 className="text-xl font-bold text-candle mb-4">अंतिम गुड़िया</h3>
             <div className="relative inline-block">
@@ -991,7 +1076,7 @@ const KalaJaadooApp = () => {
                 <p><strong>श्राप:</strong> {selectedCurse}</p>
                 <p><strong>सुई हिट्स:</strong> {Math.floor(totalScore / 10)} बार</p>
                 <p><strong>नींबू रखे:</strong> {lemonCount} नग</p>
-                <p><strong>कुल स्कोर:</strong> {totalScore} अंक</p>
+                <p><strong>काला जादू प्रभाव:</strong> {totalScore}%</p>
                 <p><strong>प्रभावशीलता:</strong> 
                   <span className="text-candle font-bold">
                     {' '}{totalScore > 100 ? 'अति प्रभावी' : totalScore > 50 ? 'प्रभावी' : 'कम प्रभावी'} 
@@ -1009,7 +1094,7 @@ const KalaJaadooApp = () => {
             totalScore > 100 ? 'bg-fire' : totalScore > 50 ? 'bg-candle' : 'bg-blood'
           } text-primary-foreground`}>
             <Trophy className="w-6 h-6 mr-2" />
-            फाइनल स्कोर: {totalScore}
+            काला जादू प्रभाव: {totalScore}%
           </Badge>
         </div>
 
@@ -1025,7 +1110,7 @@ const KalaJaadooApp = () => {
             className="flex items-center gap-2"
           >
             <Share2 className="w-4 h-4" />
-            शेयर करें
+            सर्टिफिकेट शेयर करें
           </Button>
           <Button 
             onClick={downloadCertificate}
@@ -1044,7 +1129,7 @@ const KalaJaadooApp = () => {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-4">
           <Button 
             variant="outline" 
             onClick={() => setCurrentStep('ritual')}
@@ -1059,6 +1144,12 @@ const KalaJaadooApp = () => {
           >
             नया जादू करें
           </Button>
+        </div>
+
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">
+            App created by Sumit Menaria
+          </p>
         </div>
       </Card>
     </div>
