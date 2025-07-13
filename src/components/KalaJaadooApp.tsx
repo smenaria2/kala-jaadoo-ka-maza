@@ -226,6 +226,7 @@ const KalaJaadooApp = () => {
     setPinPositions([]);
     setLemonCount(0);
     
+    // Start main timer
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -236,23 +237,47 @@ const KalaJaadooApp = () => {
         return prev - 1;
       });
     }, 1000);
+
+    // Auto-generate pins every 1.5 seconds during game
+    const pinInterval = setInterval(() => {
+      generateRandomPins();
+    }, 1500);
+
+    // Auto-generate lemons every 2 seconds during game
+    const lemonInterval = setInterval(() => {
+      generateRandomLemons();
+    }, 2000);
+
+    // Clear intervals when game ends
+    setTimeout(() => {
+      clearInterval(pinInterval);
+      clearInterval(lemonInterval);
+    }, 30000);
   }, []);
 
   const generateRandomPins = useCallback(() => {
     if (!gameActive) return;
     
-    const newPins = Array.from({ length: 3 }, (_, i) => ({
+    const newPins = Array.from({ length: 2 }, (_, i) => ({
       id: Date.now() + i,
-      x: Math.random() * 80 + 10, // 10-90% of container width
-      y: Math.random() * 80 + 10, // 10-90% of container height
+      x: Math.random() * 70 + 15, // 15-85% of container width
+      y: Math.random() * 70 + 15, // 15-85% of container height
     }));
     
     setPinPositions(newPins);
     
-    // Remove pins after 2 seconds
+    // Remove pins after 1.8 seconds
     setTimeout(() => {
       setPinPositions([]);
-    }, 2000);
+    }, 1800);
+  }, [gameActive]);
+
+  const generateRandomLemons = useCallback(() => {
+    if (!gameActive) return;
+    // Auto place lemon randomly during game
+    setLemonCount(prev => prev + 1);
+    setTotalScore(prev => prev + 5);
+    playSound('fire');
   }, [gameActive]);
 
   const hitPin = (pinId: number) => {
@@ -709,17 +734,17 @@ const KalaJaadooApp = () => {
         <div className="text-center mb-8">
           <Flame className="w-20 h-20 mx-auto text-fire mb-4 pulse-glow" />
           <h2 className="text-4xl font-bold spooky-text">काला जादू शुरू करें</h2>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-white mt-2 text-lg">
             {targetData.name} पर तंत्र-मंत्र करने का समय आ गया है! 😈
           </p>
           
           {/* Timer and Score Display */}
           <div className="mt-4 flex justify-center gap-4">
-            <Badge className={`text-lg px-4 py-2 ${gameActive ? 'bg-blood' : 'bg-fire'} text-primary-foreground`}>
+            <Badge className={`text-lg px-4 py-2 ${gameActive ? 'bg-blood' : 'bg-fire'} text-white`}>
               <Timer className="w-5 h-5 mr-2" />
               समय: {timeLeft}s
             </Badge>
-            <Badge className="bg-fire text-primary-foreground text-lg px-4 py-2">
+            <Badge className="bg-fire text-white text-lg px-4 py-2">
               <Trophy className="w-5 h-5 mr-2" />
               स्कोर: {totalScore}
             </Badge>
@@ -742,18 +767,19 @@ const KalaJaadooApp = () => {
             {gameActive && (
               <Card className="mystical-card p-6 mb-6">
                 <h3 className="text-xl font-bold mb-4 text-fire">तुरंत करें!</h3>
-                <div className="space-y-3">
+                <div className="space-y-3 text-white">
+                  <p className="text-sm mb-2">सुइयों पर तेज़ी से टैप करें!</p>
                   <Button
                     onClick={generateRandomPins}
-                    className="w-full bg-blood hover:bg-blood/90"
+                    className="w-full bg-blood hover:bg-blood/90 text-white"
                     disabled={pinPositions.length > 0}
                   >
                     <Zap className="w-4 h-4 mr-2" />
-                    सुई फेंकें ({totalScore} अंक)
+                    सुई फेंकें ({Math.floor(totalScore / 10)} हिट्स)
                   </Button>
                   <Button
                     onClick={placeLemon}
-                    className="w-full bg-candle hover:bg-candle/90"
+                    className="w-full bg-candle hover:bg-candle/90 text-white"
                   >
                     <Heart className="w-4 h-4 mr-2" />
                     नींबू रखें ({lemonCount})
@@ -762,34 +788,37 @@ const KalaJaadooApp = () => {
               </Card>
             )}
 
-            <Card className="mystical-card p-6">
-              <h3 className="text-xl font-bold mb-4 text-blood">श्राप चुनें</h3>
-              
-              {!selectedCurse && (
-                <Button
-                  onClick={startCurseSelection}
-                  disabled={curseScrolling}
-                  className="w-full mb-4 bg-blood hover:bg-blood/90"
-                >
-                  {curseScrolling ? 'श्राप चुना जा रहा है...' : 'रैंडम श्राप चुनें 🎲'}
-                </Button>
-              )}
+            {/* Curse selection only appears after game ends */}
+            {!gameActive && timeLeft === 0 && (
+              <Card className="mystical-card p-6">
+                <h3 className="text-xl font-bold mb-4 text-blood">श्राप चुनें</h3>
+                
+                {!selectedCurse && (
+                  <Button
+                    onClick={startCurseSelection}
+                    disabled={curseScrolling}
+                    className="w-full mb-4 bg-blood hover:bg-blood/90 text-white"
+                  >
+                    {curseScrolling ? 'श्राप चुना जा रहा है...' : 'रैंडम श्राप चुनें 🎲'}
+                  </Button>
+                )}
 
-              {curseScrolling && (
-                <div className="mb-4 p-4 border border-blood rounded-lg bg-blood/10 overflow-hidden">
-                  <div className="animate-bounce text-center text-sm text-blood font-bold">
-                    {scrollingCurses[0]}
+                {curseScrolling && (
+                  <div className="mb-4 p-4 border border-blood rounded-lg bg-blood/10 overflow-hidden">
+                    <div className="animate-bounce text-center text-sm text-white font-bold">
+                      {scrollingCurses[0]}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {selectedCurse && !curseScrolling && (
-                <div className="p-4 bg-blood/20 rounded-lg border border-blood/50">
-                  <p className="text-blood font-bold">चुना गया श्राप:</p>
-                  <p className="text-sm mt-2">{selectedCurse}</p>
-                </div>
-              )}
-            </Card>
+                {selectedCurse && !curseScrolling && (
+                  <div className="p-4 bg-blood/20 rounded-lg border border-blood/50">
+                    <p className="text-blood font-bold">चुना गया श्राप:</p>
+                    <p className="text-white text-sm mt-2">{selectedCurse}</p>
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
 
           {/* Interactive Doll Display */}
@@ -824,7 +853,7 @@ const KalaJaadooApp = () => {
                 {pinPositions.map((pin) => (
                   <div
                     key={pin.id}
-                    className="absolute cursor-pointer text-2xl animate-bounce hover:scale-125 transition-transform"
+                    className="absolute cursor-pointer text-2xl animate-bounce hover:scale-125 transition-transform z-10"
                     style={{ 
                       left: `${pin.x}%`, 
                       top: `${pin.y}%`,
@@ -850,7 +879,7 @@ const KalaJaadooApp = () => {
                   </div>
                 ))}
                 
-                <Badge className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-fire text-primary-foreground text-lg">
+                <Badge className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-fire text-white text-lg">
                   {dollData.nameTag || targetData.name}
                 </Badge>
               </div>
@@ -862,9 +891,15 @@ const KalaJaadooApp = () => {
                   </p>
                 )}
                 
-                {!gameActive && timeLeft === 0 && (
+                {!gameActive && timeLeft === 0 && !selectedCurse && (
                   <p className="text-lg mb-4 text-candle">
-                    समय खत्म! अब श्राप चुनें और जादू पूरा करें!
+                    समय खत्म! अब श्राप चुनें! ⚡
+                  </p>
+                )}
+
+                {!gameActive && timeLeft === 0 && selectedCurse && (
+                  <p className="text-lg mb-4 text-white">
+                    बढ़िया! अब जादू पूरा करें! ✨
                   </p>
                 )}
 
@@ -873,13 +908,14 @@ const KalaJaadooApp = () => {
                     variant="outline" 
                     onClick={() => setCurrentStep('doll')}
                     className="flex-1"
+                    disabled={gameActive}
                   >
                     वापस
                   </Button>
                   <Button 
                     variant="ritual" 
                     onClick={() => setCurrentStep('result')}
-                    disabled={!selectedCurse || (gameActive || timeLeft === 30)}
+                    disabled={!selectedCurse || gameActive || timeLeft > 0}
                     className="flex-1"
                   >
                     जादू पूरा करें 🔥
