@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,10 @@ import {
   Camera,
   Volume2,
   Trophy,
-  Target
+  Target,
+  Timer,
+  Share2,
+  Download
 } from 'lucide-react';
 import heroImage from '@/assets/hero-mystical.jpg';
 import voodooDoll from '@/assets/voodoo-doll.jpg';
@@ -59,7 +62,16 @@ const KalaJaadooApp = () => {
   const [selectedCurse, setSelectedCurse] = useState('');
   const [totalScore, setTotalScore] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [gameActive, setGameActive] = useState(false);
+  const [pinPositions, setPinPositions] = useState<{x: number, y: number, id: number}[]>([]);
+  const [lemonCount, setLemonCount] = useState(0);
+  const [curseScrolling, setCurseScrolling] = useState(false);
+  const [scrollingCurses, setScrollingCurses] = useState<string[]>([]);
+  const [dollVariant, setDollVariant] = useState(1);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const curseScrollRef = useRef<NodeJS.Timeout | null>(null);
   
   const [ritualActions, setRitualActions] = useState<RitualAction[]>([
     { 
@@ -117,7 +129,15 @@ const KalaJaadooApp = () => {
     'हर चायवाला बासी चाय देगा ☕',
     'सिनेमा हॉल में आगे लंबा आदमी बैठेगा 🎬',
     'माँ हमेशा पड़ोसी से तुलना करेगी 👩‍👦',
-    'वाई-फाई हमेशा "connecting" दिखाएगा 📶'
+    'वाई-फाई हमेशा "connecting" दिखाएगा 📶',
+    'फ़ोन की बैटरी हमेशा 1% पर मरेगी 🔋',
+    'हर एप्प crash होते रहेगा 📱',
+    'सभी जूते में कंकड़ आते रहेंगे 👟',
+    'चाबी हमेशा गलत जेब में होगी 🗝️',
+    'हर रोज़ किसी न किसी चीज़ की कतार में खड़े होना पड़ेगा 🚶‍♀️',
+    'सारी चॉकलेट पिघली हुई मिलेगी 🍫',
+    'हर सेल्फी blur आएगी 🤳',
+    'सारे नूडल्स टूटे हुए मिलेंगे 🍜'
   ];
 
   const relations = [
@@ -198,13 +218,163 @@ const KalaJaadooApp = () => {
     }
   };
 
+  // Timer and game mechanics
+  const startGameTimer = useCallback(() => {
+    setGameActive(true);
+    setTimeLeft(30);
+    setTotalScore(0);
+    setPinPositions([]);
+    setLemonCount(0);
+    
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          setGameActive(false);
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const generateRandomPins = useCallback(() => {
+    if (!gameActive) return;
+    
+    const newPins = Array.from({ length: 3 }, (_, i) => ({
+      id: Date.now() + i,
+      x: Math.random() * 80 + 10, // 10-90% of container width
+      y: Math.random() * 80 + 10, // 10-90% of container height
+    }));
+    
+    setPinPositions(newPins);
+    
+    // Remove pins after 2 seconds
+    setTimeout(() => {
+      setPinPositions([]);
+    }, 2000);
+  }, [gameActive]);
+
+  const hitPin = (pinId: number) => {
+    setPinPositions(prev => prev.filter(p => p.id !== pinId));
+    setTotalScore(prev => prev + 10);
+    playSound('cry');
+  };
+
+  const placeLemon = () => {
+    if (!gameActive) return;
+    setLemonCount(prev => prev + 1);
+    setTotalScore(prev => prev + 5);
+    playSound('fire');
+  };
+
+  // Curse selection with scrolling animation
+  const startCurseSelection = () => {
+    setCurseScrolling(true);
+    setScrollingCurses([...curses]);
+    
+    let scrollCount = 0;
+    const maxScrolls = 30 + Math.floor(Math.random() * 20); // 30-50 scrolls
+    
+    curseScrollRef.current = setInterval(() => {
+      setScrollingCurses(prev => {
+        const shuffled = [...prev];
+        // Move first item to end
+        const first = shuffled.shift();
+        if (first) shuffled.push(first);
+        return shuffled;
+      });
+      
+      scrollCount++;
+      if (scrollCount >= maxScrolls) {
+        if (curseScrollRef.current) clearInterval(curseScrollRef.current);
+        setCurseScrolling(false);
+        // Select the first curse from final position
+        setSelectedCurse(scrollingCurses[0]);
+      }
+    }, 100); // Fast scrolling
+  };
+
+  // Update doll appearance based on selection
+  useEffect(() => {
+    if (dollData.avatar) {
+      const avatarNum = parseInt(dollData.avatar.split('-')[1]) || 1;
+      setDollVariant(avatarNum);
+    }
+  }, [dollData.avatar]);
+
+  const shareResult = async () => {
+    const shareData = {
+      title: 'काला जादू सर्टिफिकेट',
+      text: `मैंने ${targetData.name} पर जादू किया है! स्कोर: ${totalScore} 😈`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+      alert('शेयर लिंक कॉपी हो गया!');
+    }
+  };
+
+  const downloadCertificate = () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = 600;
+    canvas.height = 400;
+
+    // Draw certificate background
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, 600, 400);
+    
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('काला जादू सर्टिफिकेट', 300, 50);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px Arial';
+    ctx.fillText(`टारगेट: ${targetData.name}`, 300, 100);
+    ctx.fillText(`श्राप: ${selectedCurse}`, 300, 130);
+    ctx.fillText(`स्कोर: ${totalScore}`, 300, 160);
+    ctx.fillText('प्रभावशीलता: 100% अप्रभावी', 300, 190);
+
+    const link = document.createElement('a');
+    link.download = `kala-jaadoo-${targetData.name}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+  };
+
+  // Cleanup timers
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (curseScrollRef.current) clearInterval(curseScrollRef.current);
+    };
+  }, []);
+
   const resetApp = () => {
     setCurrentStep('home');
     setTargetData({ name: '', relation: '' });
     setDollData({ avatar: '', outfit: '', nameTag: '' });
     setSelectedCurse('');
     setTotalScore(0);
+    setTimeLeft(30);
+    setGameActive(false);
+    setPinPositions([]);
+    setLemonCount(0);
+    setCurseScrolling(false);
     setRitualActions(prev => prev.map(action => ({ ...action, performed: false })));
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (curseScrollRef.current) clearInterval(curseScrollRef.current);
   };
 
   const renderHome = () => (
@@ -412,10 +582,21 @@ const KalaJaadooApp = () => {
                     <img 
                       src={voodooDoll} 
                       alt={`Avatar ${num}`}
-                      className="w-full h-24 object-cover rounded-lg opacity-80"
+                      className={`w-full h-24 object-cover rounded-lg transition-all ${
+                        dollData.avatar === `avatar-${num}` ? 'opacity-100 scale-105' : 'opacity-80'
+                      }`}
+                      style={{
+                        filter: dollData.avatar === `avatar-${num}` 
+                          ? `hue-rotate(${num * 90}deg) brightness(1.2)` 
+                          : `hue-rotate(${num * 90}deg) brightness(0.8)`
+                      }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-2xl">🪆</span>
+                      <span className={`text-2xl transition-all ${
+                        dollData.avatar === `avatar-${num}` ? 'scale-125' : ''
+                      }`}>
+                        {num === 1 ? '🪆' : num === 2 ? '👹' : num === 3 ? '🧙‍♀️' : '💀'}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -459,6 +640,10 @@ const KalaJaadooApp = () => {
                 src={voodooDoll} 
                 alt="Voodoo Doll"
                 className="w-48 h-48 object-cover rounded-lg shadow-mystical floating-animation"
+                style={{
+                  filter: `hue-rotate(${dollVariant * 90}deg) brightness(1.1)`,
+                  transform: dollData.outfit ? 'scale(1.05)' : 'scale(1)'
+                }}
               />
               
               {/* Display uploaded photo as doll face */}
@@ -469,6 +654,16 @@ const KalaJaadooApp = () => {
                     alt="Doll Face"
                     className="w-16 h-16 rounded-full object-cover border-2 border-fire shadow-glow"
                   />
+                </div>
+              )}
+              
+              {/* Outfit indicator */}
+              {dollData.outfit && (
+                <div className="absolute bottom-2 right-2 text-2xl">
+                  {dollData.outfit === 'kurta' ? '👔' : 
+                   dollData.outfit === 'saree' ? '🥻' : 
+                   dollData.outfit === 'suit' ? '🤵' : 
+                   dollData.outfit === 'dhoti' ? '🕴️' : '👹'}
                 </div>
               )}
               
@@ -518,60 +713,86 @@ const KalaJaadooApp = () => {
             {targetData.name} पर तंत्र-मंत्र करने का समय आ गया है! 😈
           </p>
           
-          {/* Score Display */}
-          <div className="mt-4 flex justify-center">
+          {/* Timer and Score Display */}
+          <div className="mt-4 flex justify-center gap-4">
+            <Badge className={`text-lg px-4 py-2 ${gameActive ? 'bg-blood' : 'bg-fire'} text-primary-foreground`}>
+              <Timer className="w-5 h-5 mr-2" />
+              समय: {timeLeft}s
+            </Badge>
             <Badge className="bg-fire text-primary-foreground text-lg px-4 py-2">
               <Trophy className="w-5 h-5 mr-2" />
               स्कोर: {totalScore}
             </Badge>
           </div>
+
+          {!gameActive && timeLeft === 30 && (
+            <Button
+              onClick={startGameTimer}
+              className="mt-4 bg-fire hover:bg-fire/90 text-white"
+              size="lg"
+            >
+              30 सेकंड का खेल शुरू करें! ⏰
+            </Button>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Ritual Actions */}
+          {/* Game Controls */}
           <div className="lg:col-span-1">
-            <Card className="mystical-card p-6">
-              <h3 className="text-xl font-bold mb-4 text-fire">तंत्र-मंत्र चुनें</h3>
-              <div className="space-y-3">
-                {ritualActions.map((action) => (
+            {gameActive && (
+              <Card className="mystical-card p-6 mb-6">
+                <h3 className="text-xl font-bold mb-4 text-fire">तुरंत करें!</h3>
+                <div className="space-y-3">
                   <Button
-                    key={action.id}
-                    variant={action.performed ? "spooky" : "outline"}
-                    onClick={() => performRitualAction(action.id)}
-                    disabled={action.performed}
-                    className="w-full justify-start relative"
+                    onClick={generateRandomPins}
+                    className="w-full bg-blood hover:bg-blood/90"
+                    disabled={pinPositions.length > 0}
                   >
-                    {action.icon}
-                    <span className="ml-2">{action.name}</span>
-                    <span className="ml-auto text-xs text-candle">
-                      {action.performed ? '✅' : `+${action.points}`}
-                    </span>
+                    <Zap className="w-4 h-4 mr-2" />
+                    सुई फेंकें ({totalScore} अंक)
                   </Button>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="mystical-card p-6 mt-6">
-              <h3 className="text-xl font-bold mb-4 text-blood">श्राप चुनें</h3>
-              <div className="space-y-2">
-                {curses.map((curse, index) => (
-                  <div
-                    key={index}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                      selectedCurse === curse 
-                        ? 'border-blood bg-accent/20' 
-                        : 'border-border hover:border-blood/50'
-                    }`}
-                    onClick={() => setSelectedCurse(curse)}
+                  <Button
+                    onClick={placeLemon}
+                    className="w-full bg-candle hover:bg-candle/90"
                   >
-                    <span className="text-sm">{curse}</span>
+                    <Heart className="w-4 h-4 mr-2" />
+                    नींबू रखें ({lemonCount})
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            <Card className="mystical-card p-6">
+              <h3 className="text-xl font-bold mb-4 text-blood">श्राप चुनें</h3>
+              
+              {!selectedCurse && (
+                <Button
+                  onClick={startCurseSelection}
+                  disabled={curseScrolling}
+                  className="w-full mb-4 bg-blood hover:bg-blood/90"
+                >
+                  {curseScrolling ? 'श्राप चुना जा रहा है...' : 'रैंडम श्राप चुनें 🎲'}
+                </Button>
+              )}
+
+              {curseScrolling && (
+                <div className="mb-4 p-4 border border-blood rounded-lg bg-blood/10 overflow-hidden">
+                  <div className="animate-bounce text-center text-sm text-blood font-bold">
+                    {scrollingCurses[0]}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {selectedCurse && !curseScrolling && (
+                <div className="p-4 bg-blood/20 rounded-lg border border-blood/50">
+                  <p className="text-blood font-bold">चुना गया श्राप:</p>
+                  <p className="text-sm mt-2">{selectedCurse}</p>
+                </div>
+              )}
             </Card>
           </div>
 
-          {/* Doll Display */}
+          {/* Interactive Doll Display */}
           <div className="lg:col-span-2">
             <Card className="mystical-card p-8 text-center">
               <h3 className="text-2xl font-bold mb-6 text-candle">जादुई गुड़िया</h3>
@@ -581,8 +802,11 @@ const KalaJaadooApp = () => {
                   src={voodooDoll} 
                   alt="Target Doll"
                   className={`w-64 h-64 object-cover rounded-lg shadow-spooky mx-auto ${
-                    ritualActions.some(a => a.performed) ? 'shake' : 'floating-animation'
+                    gameActive ? 'animate-pulse' : 'floating-animation'
                   }`}
+                  style={{
+                    filter: `hue-rotate(${dollVariant * 90}deg) brightness(1.1)`
+                  }}
                 />
                 
                 {/* Display uploaded photo as doll face */}
@@ -596,32 +820,52 @@ const KalaJaadooApp = () => {
                   </div>
                 )}
                 
+                {/* Moving Pins */}
+                {pinPositions.map((pin) => (
+                  <div
+                    key={pin.id}
+                    className="absolute cursor-pointer text-2xl animate-bounce hover:scale-125 transition-transform"
+                    style={{ 
+                      left: `${pin.x}%`, 
+                      top: `${pin.y}%`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                    onClick={() => hitPin(pin.id)}
+                  >
+                    📌
+                  </div>
+                ))}
+
+                {/* Lemon indicators */}
+                {Array.from({ length: Math.min(lemonCount, 8) }, (_, i) => (
+                  <div
+                    key={i}
+                    className="absolute text-xl"
+                    style={{
+                      left: `${20 + (i % 4) * 15}%`,
+                      bottom: `${10 + Math.floor(i / 4) * 15}%`
+                    }}
+                  >
+                    🍋
+                  </div>
+                ))}
+                
                 <Badge className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-fire text-primary-foreground text-lg">
                   {dollData.nameTag || targetData.name}
                 </Badge>
-
-                {/* Visual effects for performed actions */}
-                {ritualActions.find(a => a.id === 'pins' && a.performed) && (
-                  <div className="absolute top-8 right-8 text-2xl animate-pulse">📌</div>
-                )}
-                {ritualActions.find(a => a.id === 'lemon' && a.performed) && (
-                  <div className="absolute bottom-8 left-8 text-2xl animate-bounce">🌶️</div>
-                )}
-                {ritualActions.find(a => a.id === 'yantra' && a.performed) && (
-                  <div className="absolute inset-0 border-4 border-candle rounded-full animate-spin"></div>
-                )}
               </div>
 
               <div className="mt-8">
-                <p className="text-lg mb-4">
-                  {ritualActions.filter(a => a.performed).length}/5 तंत्र पूरे हुए
-                </p>
+                {gameActive && (
+                  <p className="text-lg mb-4 text-fire font-bold">
+                    जल्दी! सुइयों को टैप करें और नींबू रखते जाएं! 🔥
+                  </p>
+                )}
                 
-                {selectedCurse && (
-                  <div className="p-4 bg-blood/20 rounded-lg border border-blood/50 mb-6">
-                    <p className="text-blood font-bold">चुना गया श्राप:</p>
-                    <p className="text-lg mt-2">{selectedCurse}</p>
-                  </div>
+                {!gameActive && timeLeft === 0 && (
+                  <p className="text-lg mb-4 text-candle">
+                    समय खत्म! अब श्राप चुनें और जादू पूरा करें!
+                  </p>
                 )}
 
                 <div className="flex gap-3">
@@ -635,7 +879,7 @@ const KalaJaadooApp = () => {
                   <Button 
                     variant="ritual" 
                     onClick={() => setCurrentStep('result')}
-                    disabled={ritualActions.filter(a => a.performed).length < 3 || !selectedCurse}
+                    disabled={!selectedCurse || (gameActive || timeLeft === 30)}
                     className="flex-1"
                   >
                     जादू पूरा करें 🔥
@@ -651,7 +895,7 @@ const KalaJaadooApp = () => {
 
   const renderResult = () => (
     <div className="min-h-screen flex items-center justify-center p-6">
-      <Card className="mystical-card p-8 max-w-2xl w-full text-center">
+      <Card className="mystical-card p-8 max-w-3xl w-full text-center">
         <div className="mb-8">
           <div className="relative inline-block">
             <Star className="w-24 h-24 mx-auto text-candle mb-4 pulse-glow" />
@@ -665,54 +909,120 @@ const KalaJaadooApp = () => {
           </p>
         </div>
 
-        <div className="space-y-6">
-          {/* Final Score Display */}
-          <div className="mb-6">
-            <Badge className="bg-fire text-primary-foreground text-xl px-6 py-3">
-              <Trophy className="w-6 h-6 mr-2" />
-              फाइनल स्कोर: {totalScore}
-            </Badge>
-          </div>
+        <div className="grid md:grid-cols-2 gap-8 mb-8">
+          {/* Final Doll Display */}
+          <div className="text-center">
+            <h3 className="text-xl font-bold text-candle mb-4">अंतिम गुड़िया</h3>
+            <div className="relative inline-block">
+              <img 
+                src={voodooDoll} 
+                alt="Final Doll"
+                className="w-48 h-48 object-cover rounded-lg shadow-mystical"
+                style={{
+                  filter: `hue-rotate(${dollVariant * 90}deg) brightness(1.2) saturate(1.5)`
+                }}
+              />
+              
+              {/* Display uploaded photo as doll face */}
+              {dollData.facePhoto && (
+                <div className="absolute top-8 left-1/2 transform -translate-x-1/2">
+                  <img
+                    src={dollData.facePhoto}
+                    alt="Final Doll Face"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-fire shadow-glow"
+                  />
+                </div>
+              )}
 
-          <div className="p-6 bg-gradient-to-r from-purple-900/50 to-red-900/50 rounded-lg border border-fire/50">
-            <h3 className="text-xl font-bold text-fire mb-3">जादुई सर्टिफिकेट</h3>
-            <div className="space-y-2 text-left">
-              <p><strong>टारगेट:</strong> {targetData.name}</p>
-              <p><strong>रिश्ता:</strong> {targetData.relation}</p>
-              <p><strong>श्राप:</strong> {selectedCurse}</p>
-              <p><strong>तंत्र किए गए:</strong> {ritualActions.filter(a => a.performed).length}/5</p>
-              <p><strong>कुल स्कोर:</strong> {totalScore} अंक</p>
-              <p><strong>प्रभावशीलता:</strong> 100% अप्रभावी ✨</p>
+              {/* Effects based on actions */}
+              <div className="absolute top-2 right-2 text-2xl">📌</div>
+              <div className="absolute bottom-2 left-2 text-2xl">🍋</div>
+              <div className="absolute inset-0 border-2 border-candle rounded-full opacity-50"></div>
+              
+              <Badge className="absolute -top-2 -right-2 bg-fire text-primary-foreground">
+                {dollData.nameTag || targetData.name}
+              </Badge>
             </div>
           </div>
 
-          <Badge variant="outline" className="text-lg p-4 bg-candle/10 border-candle">
-            🏆 100% निष्प्रभावी बैज
+          {/* Certificate */}
+          <div className="text-left">
+            <div className="p-6 bg-gradient-to-r from-purple-900/50 to-red-900/50 rounded-lg border border-fire/50">
+              <h3 className="text-xl font-bold text-fire mb-3 text-center">जादुई सर्टिफिकेट</h3>
+              <div className="space-y-2">
+                <p><strong>टारगेट:</strong> {targetData.name}</p>
+                <p><strong>रिश्ता:</strong> {targetData.relation}</p>
+                <p><strong>श्राप:</strong> {selectedCurse}</p>
+                <p><strong>सुई हिट्स:</strong> {Math.floor(totalScore / 10)} बार</p>
+                <p><strong>नींबू रखे:</strong> {lemonCount} नग</p>
+                <p><strong>कुल स्कोर:</strong> {totalScore} अंक</p>
+                <p><strong>प्रभावशीलता:</strong> 
+                  <span className="text-candle font-bold">
+                    {' '}{totalScore > 100 ? 'अति प्रभावी' : totalScore > 50 ? 'प्रभावी' : 'कम प्रभावी'} 
+                    (100% अप्रभावी) ✨
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Score Badge */}
+        <div className="mb-6">
+          <Badge className={`text-xl px-6 py-3 ${
+            totalScore > 100 ? 'bg-fire' : totalScore > 50 ? 'bg-candle' : 'bg-blood'
+          } text-primary-foreground`}>
+            <Trophy className="w-6 h-6 mr-2" />
+            फाइनल स्कोर: {totalScore}
           </Badge>
+        </div>
 
-          <div className="p-4 bg-muted/20 rounded-lg">
-            <p className="text-sm text-muted-foreground italic">
-              📢 <strong>याद रखें:</strong> यह सब मज़ाक था! कोई वास्तविक जादू नहीं हुआ है। 
-              अब जाकर {targetData.name} से दोस्ती कर लें! 😄
-            </p>
-          </div>
+        <Badge variant="outline" className="text-lg p-4 bg-candle/10 border-candle mb-6">
+          🏆 100% निष्प्रभावी बैज
+        </Badge>
 
-          <div className="flex gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => setCurrentStep('ritual')}
-              className="flex-1"
-            >
-              दोबारा करें
-            </Button>
-            <Button 
-              variant="mystical" 
-              onClick={resetApp}
-              className="flex-1"
-            >
-              नया जादू करें
-            </Button>
-          </div>
+        {/* Share Options */}
+        <div className="flex gap-3 justify-center mb-6">
+          <Button 
+            onClick={shareResult}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Share2 className="w-4 h-4" />
+            शेयर करें
+          </Button>
+          <Button 
+            onClick={downloadCertificate}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            सर्टिफिकेट डाउनलोड
+          </Button>
+        </div>
+
+        <div className="p-4 bg-muted/20 rounded-lg mb-6">
+          <p className="text-sm text-muted-foreground italic">
+            📢 <strong>याद रखें:</strong> यह सब मज़ाक था! कोई वास्तविक जादू नहीं हुआ है। 
+            अब जाकर {targetData.name} से दोस्ती कर लें! 😄
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentStep('ritual')}
+            className="flex-1"
+          >
+            दोबारा करें
+          </Button>
+          <Button 
+            variant="mystical" 
+            onClick={resetApp}
+            className="flex-1"
+          >
+            नया जादू करें
+          </Button>
         </div>
       </Card>
     </div>
